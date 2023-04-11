@@ -2,7 +2,6 @@ use anyhow::Context;
 use clap::Parser;
 use sqlx::postgres::PgPoolOptions;
 
-use todo_squeel::config::Config;
 use todo_squeel::http;
 
 #[tokio::main]
