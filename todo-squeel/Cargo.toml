@@ -16,6 +16,7 @@ sqlx = { version = "0.6.3", features = [
 ] }
 tokio = { version = "1.27.0", features = ["macros", "rt-multi-thread"] }
 serde = { version = "1.0.160", features = ["derive"] }
+serde_json = "1.0.95"
 argon2 = "0.5.0"
 jwt = "0.16.0"
 hmac = "0.12.1"
@@ -28,3 +29,4 @@ log = "0.4.14"
 rand = "0.8.4"
 thiserror = "1.0.30"
 clap = "4.2.1"
+jsonwebtoken = "8.3.0"
