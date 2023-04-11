@@ -2,6 +2,7 @@ use axum::{routing::get, Json, Router};
 use sqlx::PgPool;
 
 mod auth;
+mod error;
 mod user;
 
 #[derive(Clone)]
