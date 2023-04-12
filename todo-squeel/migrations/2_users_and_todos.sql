@@ -15,7 +15,8 @@ create table "todos" (
     completed boolean not null default false,
     created_at timestamptz not null default now(),
     updated_at timestamptz                            
-)
+);
 
 SELECT trigger_updated_at('"users"');
+
 SELECT trigger_updated_at('"todos"');

@@ -1,3 +1,5 @@
+use std::env;
+
 use anyhow::Context;
 use sqlx::postgres::PgPoolOptions;
 
@@ -12,8 +14,11 @@ async fn main() -> anyhow::Result<()> {
     // Initialize the logger.
     env_logger::init();
 
-    let db_connection_str = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://postgres:password@localhost".to_string());
+    println!("Starting server...");
+
+    let db_connection_str = env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/postgres".to_string());
+    println!("Connecting to {}", db_connection_str);
     // We create a single connection pool for SQLx that's shared across the whole application.
     // This saves us from opening a new connection for every API call, which is wasteful.
     let db = PgPoolOptions::new()

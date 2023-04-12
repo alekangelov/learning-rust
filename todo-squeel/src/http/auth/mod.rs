@@ -1,5 +1,6 @@
 use anyhow::Error;
 use argon2::{password_hash::SaltString, Argon2, PasswordHash};
+
 use axum::{extract::State, routing::post, Json, Router};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{encode, EncodingKey, Header};
