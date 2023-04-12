@@ -32,3 +32,4 @@ clap = "4.2.1"
 jsonwebtoken = "8.3.0"
 chrono = "0.4.24"
 validator = { version = "0.16.0", features = ["derive"] }
+axum-macros = "0.3.7"

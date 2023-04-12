@@ -6,14 +6,18 @@ mod error;
 mod user;
 
 #[derive(Clone)]
-struct AppState {
+pub struct AppState {
     db: PgPool,
 }
 
 pub async fn serve(pg_pool: PgPool) {
     let app_state = AppState { db: pg_pool };
-    let app = Router::new().route("/", get(index)).with_state(app_state);
-    app.merge(auth::router());
+    let api_router = Router::new().nest("/auth", auth::router());
+    let app = Router::new()
+        .route("/", get(index))
+        .nest("/api", api_router)
+        .with_state(app_state);
+
     axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
         .serve(app.into_make_service())
         .await

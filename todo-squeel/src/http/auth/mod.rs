@@ -1,5 +1,3 @@
-use std::f32::consts::E;
-
 use anyhow::Error;
 use argon2::{password_hash::SaltString, Argon2, PasswordHash};
 use axum::{extract::State, routing::post, Json, Router};
@@ -11,10 +9,10 @@ use validator::Validate;
 use super::AppState;
 use super::{error::AppError, user::User};
 
-pub fn router() -> Router {
+pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/api/login", post(login))
-        .route("/api/register", post(register))
+        .route("/login", post(login))
+        .route("/register", post(register))
 }
 
 #[derive(Debug, Validate, Serialize, Deserialize)]
@@ -31,13 +29,15 @@ struct Claims {
     exp: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 struct AuthResponse {
     token: String,
 }
 
+#[axum_macros::debug_handler]
 async fn login(
-    Json(body): Json<LoginBody>,
     State(state): State<AppState>,
+    Json(body): Json<LoginBody>,
 ) -> Result<Json<AuthResponse>, AppError> {
     let user = match sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1")
         .bind(&body.username)
@@ -60,23 +60,24 @@ async fn login(
     Ok(Json(AuthResponse { token: jwt }))
 }
 
+#[axum_macros::debug_handler]
 async fn register(
-    Json(body): Json<LoginBody>,
     State(state): State<AppState>,
+    Json(body): Json<LoginBody>,
 ) -> Result<Json<AuthResponse>, AppError> {
     let user = match sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1")
         .bind(&body.username)
         .fetch_one(&state.db)
         .await
     {
-        Ok(user) => {
+        Ok(_) => {
             return Err(AppError {
                 message: "User already exists".to_string(),
             })
         }
         Err(_) => {
             let password_hash = hash_password(body.password.clone()).await?;
-            let userModel = User {
+            let user_model = User {
                 id: 0,
                 username: body.username.clone(),
                 password: password_hash,
@@ -84,8 +85,8 @@ async fn register(
             let user = sqlx::query_as::<_, User>(
                 "INSERT INTO users (username, password) VALUES ($1, $2) RETURNING *",
             )
-            .bind(&user.username)
-            .bind(&user.password)
+            .bind(&user_model.username)
+            .bind(&user_model.password)
             .fetch_one(&state.db)
             .await;
             user
@@ -122,7 +123,6 @@ fn generate_jwt(user: &User) -> Result<String, AppError> {
 async fn hash_password(password: String) -> Result<String, AppError> {
     let hash = tokio::task::spawn_blocking(move || -> Result<String, Error> {
         let salt = SaltString::generate(rand::thread_rng());
-        let salt_string = salt.as_str();
         let hash = PasswordHash::generate(Argon2::default(), password, &salt)
             .map_err(|e| anyhow::anyhow!("failed to generate password hash: {}", e));
         match hash {
