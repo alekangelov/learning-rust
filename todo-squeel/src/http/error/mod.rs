@@ -9,13 +9,14 @@ use serde_json::json;
 // Make our own error that wraps `anyhow::Error`.
 pub struct AppError {
     pub message: String,
+    pub code: Option<StatusCode>,
 }
 
 // Tell axum how to convert `AppError` into a response.
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         (
-            StatusCode::INTERNAL_SERVER_ERROR,
+            self.code.unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
             AJson(json!({
               "status": "ERROR",
               "success": false,

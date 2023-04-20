@@ -1,18 +1,32 @@
 use anyhow::Error;
 use argon2::{password_hash::SaltString, Argon2, PasswordHash};
+use axum::http::StatusCode;
+use axum::Extension;
 
+use super::models::Profile;
+use super::AppState;
+use super::{error::AppError, models::User};
 use axum::{extract::State, routing::post, Json, Router};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{encode, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+use uuid::uuid;
 use validator::Validate;
-
-use super::AppState;
-use super::{error::AppError, user::User};
-
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/login", post(login))
+        .route(
+            "/login",
+            post(login).get(|| async {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({
+                        "success": false,
+                        "message": "POST not suppoerted"
+                    })),
+                )
+            }),
+        )
         .route("/register", post(register))
 }
 
@@ -25,9 +39,9 @@ struct LoginBody {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Claims {
-    sub: i32,
-    exp: i64,
+pub struct JwtClaims {
+    pub sub: String,
+    pub exp: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -37,7 +51,7 @@ struct AuthResponse {
 
 #[axum_macros::debug_handler]
 async fn login(
-    State(state): State<AppState>,
+    Extension(state): Extension<AppState>,
     Json(body): Json<LoginBody>,
 ) -> Result<Json<AuthResponse>, AppError> {
     let user = match sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1")
@@ -46,15 +60,17 @@ async fn login(
         .await
     {
         Ok(user) => user,
-        Err(_) => {
+        Err(err) => {
             return Err(AppError {
-                message: "User not found".to_string(),
-            })
+                message: err.to_string(),
+                code: None,
+            });
         }
     };
     if !verify_password(body.password, user.password.clone()).await {
         return Err(AppError {
             message: "Invalid password".to_string(),
+            code: None,
         });
     }
     let jwt = generate_jwt(&user)?;
@@ -63,7 +79,7 @@ async fn login(
 
 #[axum_macros::debug_handler]
 async fn register(
-    State(state): State<AppState>,
+    Extension(state): Extension<AppState>,
     Json(body): Json<LoginBody>,
 ) -> Result<Json<AuthResponse>, AppError> {
     let user = match sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1")
@@ -74,12 +90,13 @@ async fn register(
         Ok(_) => {
             return Err(AppError {
                 message: "User already exists".to_string(),
+                code: None,
             })
         }
         Err(_) => {
             let password_hash = hash_password(body.password.clone()).await?;
             let user_model = User {
-                id: 0,
+                id: uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8"),
                 username: body.username.clone(),
                 password: password_hash,
             };
@@ -90,23 +107,35 @@ async fn register(
             .bind(&user_model.password)
             .fetch_one(&state.db)
             .await;
+
             user
         }
     };
     match user {
         Ok(user) => {
+            let _profile = sqlx::query_as::<_, Profile>(
+                "INSERT INTO profiles (user_id) VALUES ($1) RETURNING *",
+            )
+            .bind(&user.id)
+            .fetch_one(&state.db)
+            .await
+            .map_err(|_| AppError {
+                message: "Error creating profile".to_string(),
+                code: None,
+            });
             let jwt = generate_jwt(&user)?;
             Ok(Json(AuthResponse { token: jwt }))
         }
         Err(_) => Err(AppError {
             message: "Error creating user".to_string(),
+            code: None,
         }),
     }
 }
 
 fn generate_jwt(user: &User) -> Result<String, AppError> {
-    let claims = Claims {
-        sub: user.id,
+    let claims = JwtClaims {
+        sub: user.id.to_string(),
         exp: (Utc::now() + Duration::days(1)).timestamp(),
     };
     match encode(
@@ -117,6 +146,7 @@ fn generate_jwt(user: &User) -> Result<String, AppError> {
         Ok(token) => Ok(token),
         Err(_) => Err(AppError {
             message: "Error generating token".to_string(),
+            code: None,
         }),
     }
 }
@@ -137,10 +167,12 @@ async fn hash_password(password: String) -> Result<String, AppError> {
             Ok(hash) => Ok(hash),
             Err(_) => Err(AppError {
                 message: "Error generating hash".to_string(),
+                code: None,
             }),
         },
         Err(_) => Err(AppError {
             message: "Error generating hash".to_string(),
+            code: None,
         }),
     }
 }
